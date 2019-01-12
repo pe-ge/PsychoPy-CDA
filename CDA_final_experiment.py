@@ -46,6 +46,7 @@ import math
 import numpy as np
 import time
 import os
+import json
 
 # Setting up psychopy stuff: stimuli and helpers
 from psychopy.visual import Window, Rect, Circle, ShapeStim, TextStim, ImageStim  # import specific components to reduce memory load
@@ -138,11 +139,11 @@ TRIGGERS_CUE = {'left': 21, 'right': 22}  # triggers to send on cue onset
 TEXT_BREAK = 'You are now allowed to take up to three minutes break.'
 TEXT_FINISH = 'You have completed this task now!'
 
-TEXT_START = 'Press the mouse to generate trials'
 TEXT_EXPERIMENT = u'We will begin the task now.'
 TEXT_CONTINUE = 'Press the mouse to continue...'
 
-def show_gui_dlg():
+
+def show_gui_dlg(trials_foldername='trials'):
     myDlg = gui.Dlg(title='Experiment parameters')
     
     myDlg.addText('Subject data', color='purple')
@@ -171,16 +172,36 @@ def show_gui_dlg():
                 Ndistractors = tuple(eval(data[9] + ','))
                 Nruns = int(data[10])
                 Nrepetitions = int(data[11])
-            except (ValueError, NameError) as e:
-                gui.warnDlg(prompt='ERROR: wrong value')
+            except (ValueError, NameError, SyntaxError) as e:
+                gui.warnDlg(prompt='ERROR: incorrect value')
                 continue
             
-            if '' not in data: 
+            if '' not in data:
+                # attempt to find stored results
+                experiment_params = {
+                    'Ntargets': Ntargets,
+                    'Ndistractors': Ndistractors,
+                    'Nruns': Nruns,
+                    'Nrepetitions': Nrepetitions
+                } 
+                trials_filename = 'T={Ntargets},D={Ndistractors},R={Nruns},B={Nrepetitions}.json'.format(**experiment_params)
+                trials_file = os.path.join(trials_foldername, trials_filename)
+                if not os.path.isdir(trials_foldername) or not os.path.isfile(trials_file):
+                    gui.warnDlg(prompt='Please generate trials first')
+                    continue
+                with open(trials_file) as f:
+                    full_trial_list = json.load(f)
+                    
+                visit_day_idx = int(data[7]) - 1
+                if visit_day_idx < 0 or visit_day_idx >= len(full_trial_list):
+                    gui.warnDlg(prompt='ERROR: Trials file does not have required day of visit')
+                    continue
+                trial_list = full_trial_list[visit_day_idx]
                 break
             else: 
                 gui.warnDlg(prompt='ERROR: some fields are not filled!')
         else: 
-            return None, None, None
+            return None
 
     subject_data = {
         'SubInt': data[0],
@@ -195,22 +216,17 @@ def show_gui_dlg():
     }
     
     filename = "{SubInt} {SubID} {Cond} {TPtype}{TPnum} C{Cohort}-L{Location}-D{Visit} {current_time}.csv".format(**subject_data)
-
-    experiment_params = {
-        'Ntargets': Ntargets,
-        'Ndistractors': Ndistractors,
-        'Nruns': Nruns,
-        'Nrepetitions': Nrepetitions
-    }
     
-    return experiment_params, subject_data, filename
+    return experiment_params, subject_data, filename, trial_list
 
 
 # show GUI dialogue
-experiment_params, subject_data, filename = show_gui_dlg()
-# if cancel clicked -> quit
-if experiment_params is None and filename is None:
+gui_output = show_gui_dlg()
+# if cancel clicked => quit
+if gui_output is None:
     core.quit()
+    
+experiment_params, subject_data, filename, trial_list = gui_output
 
 # Condition parameters (factorial design)
 N_TARGETS = experiment_params['Ntargets']
@@ -255,26 +271,6 @@ MON_FRAMERATE = start_info['frame_rate']
 FUNCTIONS
 """
 
-def spaced_xys(N, side):
-    """ 
-    Brute force N coordinates until they meet the MIN_DIST criterion.
-    Reasonable combinations of N, MIN_DIST and FIELD_HEIGHT/WIDTH are required
-    for this to not go into infinite loops.
-    """
-    while True:
-        # list of (x,y) coordinates, rounded.
-        coords = [(round(random.uniform(CENTER_DIST, CENTER_DIST+FIELD_WIDTH)*side, 3),
-                   round(random.uniform(-FIELD_HEIGHT/2, FIELD_HEIGHT/2), 3))
-                   for i in range(N)]
-
-        # Loop through combinations and check if they are good
-        combinations = itertools.combinations(coords, 2)  # pairwise combinations
-        for c in combinations:
-            if math.sqrt((c[1][0] - c[0][0])**2 + (c[1][1]-c[0][1])**2) < MIN_DIST:  # pythagoras
-                break  # break for loop
-        else:  # if for loop wasn't broken (all coords are good)
-            return coords
-        
 def ask(text='', keyList=KEYS_ADVANCE):
     """
     Show a text and returns answer (keypress)
@@ -297,103 +293,17 @@ def ask(text='', keyList=KEYS_ADVANCE):
     
     return key
 
-
-def make_empty_trial(exp_phase):
-    """ Get the correct trial structure. Useful for barpulses in which we do not
-    want all these fields filled out with stuff that's never shown. """
-    return {
-        # Trial info. Will be filled out later
-        'CueSide':'', 'block':'', 'numTargets':'', 'numDistracts':'', 'Probe':'',
-        'Condition':'', 'ProbeCode':'', 'CueCode':'', 'xys':'', 'oris':'', 
-        'colors':'', 'targets':'', 'probe_id':'', 'probe_ori': '', 'no_block':'',
-        'no_total': '',
-
-        # Placeholders for data. Will be filled out later.
-        #'ans': '', # 'rt': '', 'response.corr': '',
-        'itiUTC': '', 'arrowUTC': '',
-        'soaUTC': '', 'memoryArrayUTC': '', 'retentionUTC': '', 'testArrayUTC': '',
-        
-        # Barcode
-        'EventCode': '', #'StartBarcodeUTC': '',
-        
-        # General session info
-        'exp_phase': exp_phase,
-        'date': start_info['start_time'],
-        'session': start_info['session'],
-        'frameRate': start_info['frame_rate'],
-        'expName': EXP_IDENTIFIER,
-        'participant': start_info['save_file_name'],
-        'response_device': RESPONSE_DEVICE
-    }
-
-
-def make_trial_list(exp_phase):
-    """ Make a list list of trials for the full experiment """
-    trial_list = []
     
-    # Loop through blocks and randomize within blocks
-    for block in range(BLOCKS['experiment']): # if exp_phase == 'experiment' else BLOCKS['practice']):  # practice or experiment
-        trials_block = []
-        
-        # Now loop through parameters. Factorial design, so we can just make
-        # a list of all combinations and loop through it.
-#        if exp_phase == 'practice_experimenter':  # practice
-#            parameter_sets = itertools.product(range(REPETITIONS['practice']), N_TARGETS, N_DISTRACTORS, [''], [''])
-#        elif exp_phase == 'pulse':
-#            parameter_sets = itertools.product([0], [1], [0], ['same'], ['left'])
-#        else:  # experiment or otherwise
-        parameter_sets = itertools.product(range(REPETITIONS['experiment']), N_TARGETS, N_DISTRACTORS, PROBE_TYPES, CUES)
-        
-        for repetition, n_targets, n_distractors, probe_type, cue in parameter_sets:
-            # index of targets. First left indices and then right indices
-            targets_left = random.sample(range(n_targets), n_targets)
-            targets_right = random.sample(range(n_targets+n_distractors, n_distractors + 2*n_targets), n_targets)
-            #if exp_phase == 'practice_experimenter':  # Just take random instead of factorial
-            #    probe_type = random.choice(PROBE_TYPES)
-            #    cue = random.choice(CUES)
-            
-            # calculate condition number
-            condition = 1 + \
-                             (PROBE_TYPES.index(probe_type)==1)*1 + \
-                             (CUES.index(cue)==1)*2 + \
-                             (N_DISTRACTORS.index(n_distractors)==1)*4 + \
-                             (N_TARGETS.index(n_targets)==1)*8
-
-            # Parameters of the trial type
-            trial = make_empty_trial(exp_phase)
-            trial['CueSide'] = cue
-            trial['block'] = block + 1
-            trial['numTargets'] = n_targets
-            trial['numDistracts'] = n_distractors
-            trial['Probe'] = probe_type
-            trial['exp_phase'] = exp_phase
-            trial['Condition'] = condition
-            trial['ProbeCode'] = condition  # identical to as Condition. Delete?
-            trial['CueCode'] = TRIGGERS_CUE[cue]
-        
-            # Parameters of the rectangles
-            trial['xys'] = spaced_xys(n_targets + n_distractors, -1) + spaced_xys(n_targets + n_distractors, 1)
-            trial['oris'] = np.random.choice(ORIS, 2*(n_distractors+n_targets), replace=True)
-            trial['colors'] = [TARGET_COLOR if i in targets_left+targets_right else random.choice(DISTRACTOR_COLORS) for i in range(2*(n_targets+n_distractors))]
-            trial['targets'] = targets_left + targets_right
-            trial['probe_id'] = random.choice(targets_left) if cue is 'left' else random.choice(targets_right)
-            # Set probe orientation
-            if probe_type == 'change':
-                trial['probe_ori'] = random.choice([ori for ori in ORIS if ori != trial['oris'][trial['probe_id']]])  # orientation if changed. choose a random non-current orientation for the probe
-            elif probe_type == 'same':
-                trial['probe_ori'] = trial['oris'][trial['probe_id']]  # same orientation as before
-                
-            trials_block += [trial]
-            
-        # Randomize order and extend trial_list with this block
-        random.shuffle(trials_block)
-        for no, trial in enumerate(trials_block):
-            trial['no_block'] = no + 1  # start at 1
-            trial_list += [trial.copy()]
-    
-    # Add absolute trial number for the sake of analysis of effects of time
-    for no, trial in enumerate(trial_list):
-        trial['no_total'] = no
+def prepare_trials(trial_list):
+    random.shuffle(trial_list)
+    for trial in trial_list:
+        trial['date'] = start_info['start_time']
+        trial['session'] = start_info['session']
+        trial['frameRate'] = start_info['frame_rate']
+        trial['expName'] = EXP_IDENTIFIER
+        trial['participant'] = start_info['save_file_name']
+        trial['response_device'] = RESPONSE_DEVICE
+        trial['CueCode'] = TRIGGERS_CUE[trial['CueSide']]
     return trial_list
     
 
@@ -452,23 +362,17 @@ def write_performance(trial_list):
         print 'Final accuracy: %.2f%%' % (100 * num_all_correct / num_all_trials)
         f.write('Final accuracy: %.2f%%' % (100 * num_all_correct / num_all_trials))
 
-def run_block(exp_phase, experiment_params, trial_list=False):
-    """ Loops through trials. Generate a full trial_list if none is specified."""
-    ask(TEXT_START)
-
+def run_block(experiment_params, trial_list):
     trialN = 1
     blockN = 1
     # Durations of the different routines differ between experiment and practice
-    durations = DURATIONS['experiment'] # if exp_phase == 'experiment' else DURATIONS['practice']
+    durations = DURATIONS['experiment']
     
     # Loop through trials
-    trial_list = make_trial_list(exp_phase) if not trial_list else trial_list
     ask(TEXT_EXPERIMENT)
     for trial in trial_list:
         print "Trial#:", trialN , "Block#:",blockN 
         trialN = trialN + 1 
-        # BREAK on each new block except the first
-        trial['exp_phase'] = exp_phase
         if trial['no_block'] == 1 and trial['block'] > 1:
             ask(TEXT_BREAK)
             blockN = blockN + 1 
@@ -477,8 +381,6 @@ def run_block(exp_phase, experiment_params, trial_list=False):
         # ITI
         barcode.fillColor = 'black'
         win.callOnFlip(record_utc, trial, 'itiUTC')
-        if exp_phase == 'pace_all':
-            show_instruct_on_first_frame(TEXT_INTRO_FIX)
 
         for frame in range(durations['ITI']):
             barcode.draw()
@@ -492,13 +394,9 @@ def run_block(exp_phase, experiment_params, trial_list=False):
         barcode.fillColor = 'white'
         win.callOnFlip(record_utc, trial, 'arrowUTC')
         
-        if exp_phase == 'experiment':
-            # send arrow direction to LPT
-            win.callOnFlip(parallel.setData, DIO2_TO_LPT[ARR_DIRECTION_TO_DIO2[direction]])
+        # send arrow direction to LPT
+        win.callOnFlip(parallel.setData, DIO2_TO_LPT[ARR_DIRECTION_TO_DIO2[direction]])
          
-        if exp_phase == 'pace_all':
-            show_instruct_on_first_frame(TEXT_INTRO_CUE)
-        
         for frame in range(durations['cue']):
             barcode.draw()
             arrow.draw()
@@ -520,11 +418,9 @@ def run_block(exp_phase, experiment_params, trial_list=False):
         # ARRAY 1
         barcode.fillColor = 'white'
         win.callOnFlip(record_utc, trial, 'memoryArrayUTC')
-        if exp_phase == 'experiment':
-            win.callOnFlip(parallel.setData, DIO2_TO_LPT[PROBE_TO_DIO2[trial['Probe']]])
+        # send probe type (same/change) to LPT
+        win.callOnFlip(parallel.setData, DIO2_TO_LPT[PROBE_TO_DIO2[trial['Probe']]])
             
-        if exp_phase == 'pace_all':
-            show_instruct_on_first_frame(TEXT_INTRO_ARRAY1)
         for frame in range(durations['array1']):
             # Use rect to draw all the appropriate stimuli
             for i in range(len(trial['xys'])):
@@ -541,8 +437,6 @@ def run_block(exp_phase, experiment_params, trial_list=False):
         # RETENTION
         barcode.fillColor = 'black'
         win.callOnFlip(record_utc, trial, 'retentionUTC')
-        if exp_phase == 'pace_all':
-            show_instruct_on_first_frame(TEXT_INTRO_RETENTION)
 
         for frame in range(durations['retention']):
             barcode.draw()
@@ -562,12 +456,10 @@ def run_block(exp_phase, experiment_params, trial_list=False):
         fix.draw()
         
         # Ready to display. Line up functions to be executed on flip
-        if exp_phase == 'experiment':
-            win.callOnFlip(parallel.setData, DIO2_TO_LPT[LPT_TEST_ARRAY])  # start trigger on next flip
+        # send test array appearance to LPT
+        win.callOnFlip(parallel.setData, DIO2_TO_LPT[LPT_TEST_ARRAY])
 
         win.callOnFlip(record_utc, trial, 'testArrayUTC')
-        if exp_phase == 'pace_all':
-            show_instruct_on_first_frame(TEXT_INTRO_PROBE)
         flip_time = win.flip()
         
         # Stop trigger
@@ -575,27 +467,26 @@ def run_block(exp_phase, experiment_params, trial_list=False):
         parallel.setData(0)
         
         # Record response
-        if not exp_phase == 'pace_all':
-            response_end_time = flip_time + durations['probe']/MON_FRAMERATE - 0.008  # the time of core.getTime() when response time has ended.
-            maxWait = response_end_time - core.getTime() if exp_phase in ('experiment') else float('inf')
+        response_end_time = flip_time + durations['probe']/MON_FRAMERATE - 0.008  # the time of core.getTime() when response time has ended.
+        maxWait = response_end_time - core.getTime()
+        
+        # Get response
+        if RESPONSE_DEVICE == 'mouse':
+            key = waitMousePressed(keyList=KEYS_ANS.keys(), maxWait=maxWait)  # desired duration from flip_time, but allow for 8 ms to catch the next win.flip()
             
-            # Get response
-            if RESPONSE_DEVICE == 'mouse':
-                key = waitMousePressed(keyList=KEYS_ANS.keys(), maxWait=maxWait)  # desired duration from flip_time, but allow for 8 ms to catch the next win.flip()
-                
-            # React to response
+        # React to response
 
-            # A basic transformations
-            rt = core.monotonicClock.getTime() - flip_time  # time elapsed since probe onset, not since psychopy.core start
-            
-            # Score trial
-            trial['ans'] = KEYS_ANS[key]
-            trial['response.corr'] = int(KEYS_ANS[key] == trial['Probe'])
-            trial['rt'] = rt
-            
-            # Continue waiting until time has passed
-            if key is not None and exp_phase in ('experiment', 'practice_experimenter'):
-                core.wait(response_end_time - core.getTime(), 0.1)
+        # A basic transformations
+        rt = core.monotonicClock.getTime() - flip_time  # time elapsed since probe onset, not since psychopy.core start
+        
+        # Score trial
+        trial['ans'] = KEYS_ANS[key]
+        trial['response.corr'] = int(KEYS_ANS[key] == trial['Probe'])
+        trial['rt'] = rt
+        
+        # Continue waiting until time has passed
+        if key is not None:
+            core.wait(response_end_time - core.getTime(), 0.1)
 
         # SAVE non-practice trials if experiment was not exited.
         if event.getKeys(keyList=KEYS_QUIT):
@@ -609,6 +500,6 @@ file_path = os.path.join(start_info['save_file_path'], filename)
 writer = csvWriter(file_path) # save I/O for when the experiment ends/python errors
 
 # Run the real thing!
-
-run_block('experiment', experiment_params)
+trial_list = prepare_trials(trial_list)
+run_block(experiment_params, trial_list)
 ask(TEXT_FINISH)
