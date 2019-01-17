@@ -238,7 +238,7 @@ REPETITIONS = {'experiment': experiment_params['Nrepetitions']}
 
 my_monitor = Monitor('testMonitor', width=MON_WIDTH, distance=MON_DISTANCE)  # Create monitor object from the variables above. This is needed to control size of stimuli in degrees.
 my_monitor.setSizePix(MON_SIZE)
-win = Window(monitor=my_monitor, screen=0, units='cm', color=MON_COLOR, colorSpace='rgb255', fullscr=False, allowGUI=False)  # Initiate psychopy Window as the object "win", using the myMon object from last line. Use degree as units!
+win = Window(monitor=my_monitor, screen=0, units='cm', color=MON_COLOR, colorSpace='rgb255', fullscr=True, allowGUI=False)  # Initiate psychopy Window as the object "win", using the myMon object from last line. Use degree as units!
 barcode = tools.barcode.BarcodePulse(win)
 
 # Mouse has to be import after a Window is created!
@@ -324,43 +324,55 @@ def assess_timing(time_first, time_second, frames):
 
 
 def write_performance(trial_list):
+    from collections import defaultdict
+    
     results_path = file_path[:-4] + '-results.csv'
-    num_totals = {}
-    num_correct = {}
+    
+    true_positive = defaultdict(int)
+    condition_positive = defaultdict(int)
+    false_negative = defaultdict(int)
+    condition_negative = defaultdict(int)
+    
+    all_combinations = set()
+    
     num_all_trials = 0
     num_all_correct = 0
 
     # count number of total and correct
     for trial in trial_list:
-        response_corr = trial.get('response.corr', 0)
-        numTargets = trial['numTargets']
-        numDistracts = trial['numDistracts']
+        response_corr = trial.get('response.corr', 0)  # 1 = correct, 0 = incorrect
         
-        # incr total
-        if (numTargets, numDistracts) not in num_totals:
-            num_totals[(numTargets, numDistracts)] = 0
-        num_totals[(numTargets, numDistracts)] += 1
+        num_targets = trial['numTargets']
+        num_distracts = trial['numDistracts']
         
-        # incr correct
-        if (numTargets, numDistracts) not in num_correct:
-            num_correct[(numTargets, numDistracts)] = 0
-        num_correct[(numTargets, numDistracts)] += response_corr
+        if trial['Probe'] == 'same':
+            condition_negative[(num_targets, num_distracts)] += 1
+            false_negative[(num_targets, num_distracts)] = 1 - response_corr
+        elif trial['Probe'] == 'change':
+            condition_positive[(num_targets, num_distracts)] += 1
+            true_positive[(num_targets, num_distracts)] += response_corr
+        else:
+            print 'incorrect probe value (%s) :-(' % (trial['Probe'])
         
-        num_all_trials += 1
-        num_all_correct += response_corr
-        
+        all_combinations.add((num_targets, num_distracts))
+
     # evaluate accuracy
     with open(results_path, 'w') as f:
-        print 'Accuracy for each class:'
-        f.write('Accuracy for each class:\n')
+        print 'WMC for each class:'
+        f.write('WMC for each class:\n')
         # sort items first by target num, then by distractor num
-        sorted_items = sorted(num_totals.items(), key= lambda ((t, d), v): 100 * t + d)
-        for ((numTargets, numDistracts), total) in sorted_items:
-            print 'T=%d, D=%d: %.2f%%' % (numTargets, numDistracts, 100 * num_correct[(numTargets, numDistracts)] / total)
-            f.write('T=%d, D=%d: %.2f%%\n' % (numTargets, numDistracts, 100 * num_correct[(numTargets, numDistracts)] / total))
-
-        print 'Final accuracy: %.2f%%' % (100 * num_all_correct / num_all_trials)
-        f.write('Final accuracy: %.2f%%' % (100 * num_all_correct / num_all_trials))
+        sorted_items = sorted(list(all_combinations), key= lambda (t, d): 100 * t + d)
+        for (num_targets, num_distracts) in sorted_items:
+            hit_rate = true_positive[(num_targets, num_distracts)] / condition_positive[(num_targets, num_distracts)]
+            false_alarm = false_negative[(num_targets, num_distracts)] / condition_negative[(num_targets, num_distracts)]
+            
+            wmc_1 = str((num_targets + num_distracts) * (hit_rate - false_alarm))
+            wmc_2 = str((num_targets) * (hit_rate - false_alarm))
+            
+            wmc = wmc_1 if wmc_1 == wmc_2 else '%s %s' % (wmc_1, wmc_2)
+            
+            print 'T=%d, D=%d: %s' % (num_targets, num_distracts, wmc)
+            f.write('T=%d, D=%d: %s\n' % (num_targets, num_distracts, wmc))
 
 def run_block(experiment_params, trial_list):
     trialN = 1
