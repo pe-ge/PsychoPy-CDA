@@ -85,13 +85,13 @@ def spaced_xys(N, side):
 
 def make_trial_list(trial_params):
     """ Make a list list of trials for the full experiment """
-    trial_list = []
+    full_trial_list = []
     for visit_day in range(VISITS):
-        trial_list.append([])
-        
+        current_day = []
+
         # Loop through blocks and randomize within blocks
         for block in range(trial_params['Nruns']):
-            trials_block = []
+            current_block = []
             
             parameter_sets = itertools.product(range(trial_params['Nrepetitions']), trial_params['Ntargets'], trial_params['Ndistractors'], PROBE_TYPES, CUES)
             
@@ -128,19 +128,16 @@ def make_trial_list(trial_params):
                     trial['probe_ori'] = random.choice([ori for ori in ORIS if ori != trial['oris'][trial['probe_id']]])  # orientation if changed. choose a random non-current orientation for the probe
                 elif probe_type == 'same':
                     trial['probe_ori'] = trial['oris'][trial['probe_id']]  # same orientation as before
-                    
-                trials_block += [trial]
+
+                current_block.append(trial)
+
+            # Randomize order and append to current day
+            random.shuffle(current_block)
+            current_day.append(current_block)
                 
-            # Randomize order and extend trial_list with this block
-            random.shuffle(trials_block)
-            for no, trial in enumerate(trials_block):
-                trial['no_block'] = no + 1  # start at 1
-                trial_list[-1] += [trial.copy()]
-        
-        # Add absolute trial number for the sake of analysis of effects of time
-        for no, trial in enumerate(trial_list[-1]):
-            trial['no_total'] = no
-    return trial_list
+        full_trial_list.append(current_day)
+
+    return full_trial_list
 
 
 if __name__ == '__main__':
@@ -158,7 +155,7 @@ if __name__ == '__main__':
         os.makedirs(TRIALS_FOLDERNAME)
         
     # prepare filename
-    filename = 'T={Ntargets},D={Ndistractors},R={Nruns},B={Nrepetitions}.json'.format(**trial_params)
+    filename = 'T={Ntargets},D={Ndistractors},B={Nruns},R={Nrepetitions}.json'.format(**trial_params)
     # store trials
     with open(os.path.join(TRIALS_FOLDERNAME, filename), 'w') as f:
         json.dump(trial_list, f)

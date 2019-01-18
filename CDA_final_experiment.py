@@ -184,7 +184,7 @@ def show_gui_dlg(trials_foldername='trials'):
                     'Nruns': Nruns,
                     'Nrepetitions': Nrepetitions
                 } 
-                trials_filename = 'T={Ntargets},D={Ndistractors},R={Nruns},B={Nrepetitions}.json'.format(**experiment_params)
+                trials_filename = 'T={Ntargets},D={Ndistractors},B={Nruns},R={Nrepetitions}.json'.format(**experiment_params)
                 trials_file = os.path.join(trials_foldername, trials_filename)
                 if not os.path.isdir(trials_foldername) or not os.path.isfile(trials_file):
                     gui.warnDlg(prompt='Please generate trials first')
@@ -295,8 +295,17 @@ def ask(text='', keyList=KEYS_ADVANCE):
 
     
 def prepare_trials(trial_list):
-    random.shuffle(trial_list)
-    for trial in trial_list:
+    prepared_trial_list = []
+    for current_block in trial_list:
+        random.shuffle(current_block)
+        # append no within block
+        for no, trial in enumerate(current_block):
+            trial['no_block'] = no + 1
+            
+        prepared_trial_list.extend(current_block)
+
+    # then include additional info
+    for trial in prepared_trial_list:
         trial['date'] = start_info['start_time']
         trial['session'] = start_info['session']
         trial['frameRate'] = start_info['frame_rate']
@@ -304,7 +313,10 @@ def prepare_trials(trial_list):
         trial['participant'] = start_info['save_file_name']
         trial['response_device'] = RESPONSE_DEVICE
         trial['CueCode'] = TRIGGERS_CUE[trial['CueSide']]
-    return trial_list
+        
+    from pprint import pprint
+    pprint(prepared_trial_list)
+    return prepared_trial_list
     
 
 def show_instruct_on_first_frame(text):
