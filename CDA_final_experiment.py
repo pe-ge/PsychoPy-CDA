@@ -314,8 +314,6 @@ def prepare_trials(trial_list):
         trial['response_device'] = RESPONSE_DEVICE
         trial['CueCode'] = TRIGGERS_CUE[trial['CueSide']]
         
-    from pprint import pprint
-    pprint(prepared_trial_list)
     return prepared_trial_list
     
 
