@@ -357,7 +357,7 @@ def write_performance(trial_list):
         
         if trial['Probe'] == 'same':
             condition_negative[(num_targets, num_distracts)] += 1
-            false_negative[(num_targets, num_distracts)] = 1 - response_corr
+            false_negative[(num_targets, num_distracts)] += 1 - response_corr
         elif trial['Probe'] == 'change':
             condition_positive[(num_targets, num_distracts)] += 1
             true_positive[(num_targets, num_distracts)] += response_corr
