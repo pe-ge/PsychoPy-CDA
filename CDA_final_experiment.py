@@ -339,14 +339,16 @@ def write_performance(trial_list):
     results_path = file_path[:-4] + '-results.csv'
     
     true_positive = defaultdict(int)
+    false_positive = defaultdict(int)
     condition_positive = defaultdict(int)
     false_negative = defaultdict(int)
+    true_negative = defaultdict(int)
     condition_negative = defaultdict(int)
     
     all_combinations = set()
     
-    num_all_trials = 0
-    num_all_correct = 0
+    num_correct = defaultdict(int)
+    num_totals = defaultdict(int)
 
     # count number of total and correct
     for trial in trial_list:
@@ -357,32 +359,59 @@ def write_performance(trial_list):
         
         if trial['Probe'] == 'same':
             condition_negative[(num_targets, num_distracts)] += 1
+            true_negative[(num_targets, num_distracts)] += response_corr
             false_negative[(num_targets, num_distracts)] += 1 - response_corr
         elif trial['Probe'] == 'change':
             condition_positive[(num_targets, num_distracts)] += 1
             true_positive[(num_targets, num_distracts)] += response_corr
+            false_positive[(num_targets, num_distracts)] += 1 - response_corr
         else:
             print 'incorrect probe value (%s) :-(' % (trial['Probe'])
         
         all_combinations.add((num_targets, num_distracts))
+        
+        num_correct[(num_targets, num_distracts)] += response_corr
+        num_totals[(num_targets, num_distracts)] += 1
 
-    # evaluate accuracy
+    # evaluate performance
     with open(results_path, 'w') as f:
-        print 'WMC for each class:'
-        f.write('WMC for each class:\n')
-        # sort items first by target num, then by distractor num
+        # sort items first by target, then by distractor
         sorted_items = sorted(list(all_combinations), key= lambda (t, d): 100 * t + d)
         for (num_targets, num_distracts) in sorted_items:
-            hit_rate = true_positive[(num_targets, num_distracts)] / condition_positive[(num_targets, num_distracts)]
-            false_alarm = false_negative[(num_targets, num_distracts)] / condition_negative[(num_targets, num_distracts)]
+            TP = true_positive[(num_targets, num_distracts)]
+            FP = false_positive[(num_targets, num_distracts)]
+            TN = true_negative[(num_targets, num_distracts)]
+            FN = false_negative[(num_targets, num_distracts)]
             
-            wmc_1 = str((num_targets + num_distracts) * (hit_rate - false_alarm))
-            wmc_2 = str((num_targets) * (hit_rate - false_alarm))
+            CP = condition_positive[(num_targets, num_distracts)]
+            CN = condition_negative[(num_targets, num_distracts)]
             
-            wmc = wmc_1 if wmc_1 == wmc_2 else '%s %s' % (wmc_1, wmc_2)
+            num_corr = num_correct[(num_targets, num_distracts)]
+            num_tot = num_totals[(num_targets, num_distracts)]
             
-            print 'T=%d, D=%d: %s' % (num_targets, num_distracts, wmc)
-            f.write('T=%d, D=%d: %s\n' % (num_targets, num_distracts, wmc))
+            hit_rate = TP / CP
+            false_alarm = FN / CN
+            
+            wmc = num_targets * (hit_rate - false_alarm)
+            precision = TP / (TP+FP)
+            recall = TP / (TP+FN)
+            accuracy = num_corr / num_tot
+            
+            data = {
+                'T': num_targets,
+                'D': num_distracts,
+                'MC': wmc,
+                'TP': TP,
+                'FN': FN,
+                'FP': FP,
+                'TN': TN,
+                'P': precision,
+                'R': recall,
+                'Acc': accuracy
+            }
+            performance = 'T={T}, D={D}: MC={MC} TP={TP} FN={FN} FP={FP} TN={TN} P={P} R={R} Acc={Acc}'.format(**data)
+            print performance
+            f.write(performance + '\n')
 
 def run_block(experiment_params, trial_list):
     trialN = 1
