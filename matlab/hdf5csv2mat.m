@@ -54,10 +54,10 @@ end
 mL=[];
 for i=1:length(vID)
     switch vID(i)
-        case marker.id(1) %%%% pushRed
-            mL{i}='RBchange';
-        case marker.id(2) %%%% pushGreen
+        case marker.id(1) %%%% pushGreen
             mL{i}='RBsame';
+        case marker.id(2) %%%% pushRed
+            mL{i}='RBchange';
         case marker.id(3) %%%% fotoDiod
             switch vID(i-1)
                 case marker.id(4) %%%% TA is either pp1 pp2 or pp2 pp1
