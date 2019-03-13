@@ -28,7 +28,7 @@ end
 stimT=unique(sType);
 lenStimT=length(stimT);
 
-for s=1:lenStimT
+for s = 1:lenStimT
     %%%% select indices for given combination of T + D
     idxs                   = find(strcmp(sType,stimT{s})==1);
     
@@ -37,39 +37,39 @@ for s=1:lenStimT
     probes                 = markerCSV.probe(idxs);
     
     %%%% count probes=change and response=Correct
-    true_positive          = sum(strcmp(responses(find(strcmp(probes, 'change'))), 'Correct'));
+    TP          = sum(strcmp(responses(find(strcmp(probes, 'change'))), 'Correct'));
     %%%% count probes=change and response=InCorrect
-    false_positive         = sum(strcmp(responses(find(strcmp(probes, 'change'))), 'InCorrect'));
+    FP         = sum(strcmp(responses(find(strcmp(probes, 'change'))), 'InCorrect'));
     %%%% count probes=change
-    condition_positive     = sum(strcmp(probes, 'change'));
+    condP     = sum(strcmp(probes, 'change'));
     
     %%%% count probes=change and response=Correct
-    true_negative         = sum(strcmp(responses(find(strcmp(probes, 'same'))), 'Correct'));
+    TN         = sum(strcmp(responses(find(strcmp(probes, 'same'))), 'Correct'));
     %%%% count probes=change and response=InCorrect
-    false_negative        = sum(strcmp(responses(find(strcmp(probes, 'same'))), 'InCorrect'));
+    FN        = sum(strcmp(responses(find(strcmp(probes, 'same'))), 'InCorrect'));
     %%%% count probes=change
-    condition_negative    = sum(strcmp(probes, 'same'));
+    condN    = sum(strcmp(probes, 'same'));
     
     num_total             = length(idxs);
     num_correct           = sum(strcmp(responses,'Correct'));
     num_missed            = sum(strcmp(responses,'Missed'));
-    num_targets           = stimT{s}(1);
-    num_distractors       = stimT{s}(2);
+    num_tgt               = str2num(stimT{s}(1));
+    num_dis               = str2num(stimT{s}(2));
     
     %%%% caculate performance
-    hit_rate = true_positive / condition_positive;
-    false_alarm = false_negative / condition_negative;
-    wmc = num_targets * (hit_rate - false_alarm);
-    precision = true_positive / (true_positive + false_positive);
-    recall = true_positive / (true_positive + false_negative);
+    HR = TP / condP;  % hit rate
+    FA = FN / condN;  % false alarm
+    wmc = num_tgt * (HR - FA);
+    precision = TP / (TP + FP);
+    recall = TP / (TP + FN);
     accuracy = num_correct / num_total;
 
     %%%% show in console
-    str_performance = sprintf('T=%c, D=%c: MC=%.2f TP=%d FN=%d FP=%d TN=%d P=%.2f R=%.2f Acc=%.2f Miss=%d\n', num_targets, num_distractors, wmc, true_positive, false_negative, false_positive, true_negative, precision, recall, accuracy, num_missed);
+    str_performance = sprintf('T=%d, D=%d: MC=%.2f TP=%d FN=%d FP=%d TN=%d P=%.2f R=%.2f Acc=%.2f Miss=%d\n', num_tgt, num_dis, wmc, TP, FN, FP, TN, precision, recall, accuracy, num_missed);
     disp(str_performance)
     
     %%%% write to file
-    fprintf(fid, 'T=%c, D=%c: MC=%.2f TP=%d FN=%d FP=%d TN=%d P=%.2f R=%.2f Acc=%.2f Miss=%d\n', num_targets, num_distractors, wmc, true_positive, false_negative, false_positive, true_negative, precision, recall, accuracy, num_missed);
+    fprintf(fid, str_performance);
 end
 
 fclose(fid);
