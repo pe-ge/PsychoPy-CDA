@@ -40,8 +40,9 @@ elseif sum(~cellfun(@strcmp, marker.desc, cellCheck))
     error('s.t. wrong with cells check ....')
 end
 
-%%%% remove if first is fotodiod
-if vID(1)==marker.id(3)
+%%%% first marker should not be fotodiode
+%%%% if it is, remove it
+while vID(1)==marker.id(3)
     timeD=(mT(2)-mT(1))/header.sampleFreq;
     if timeD > 3 %%% more than 3 sec difference - remove 
         vID(1)=[]; 
@@ -54,9 +55,9 @@ end
 mL=[];
 for i=1:length(vID)
     switch vID(i)
-        case marker.id(1) %%%% pushGreen
+        case marker.id(1) %%%% pushRed
             mL{i}='RBsame';
-        case marker.id(2) %%%% pushRed
+        case marker.id(2) %%%% pushGreen
             mL{i}='RBchange';
         case marker.id(3) %%%% fotoDiod
             switch vID(i-1)
