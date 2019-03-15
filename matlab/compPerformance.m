@@ -1,27 +1,22 @@
-function compPerformance(path_recordings)
+function compPerformance(fn)
 
-disp('Calculating performance')
+disp('Calculating performance:')
 
-%%%% get matlab filename
-filename_mat = strsplit(path_recordings, filesep);
-filename_mat = filename_mat(end);
-filename_mat = filename_mat{1};
-filename_mat = [path_recordings, filesep, filename_mat, '.mat'];
+fn_mat = [fn, '.mat'];
 
 %%%% prepare filename for results and open file
-filename_results = [path_recordings, filesep, 'performance.txt'];
-fid = fopen(filename_results, 'w');
+fn_results = [fn '.txt'];
+fid = fopen(fn_results, 'w');
 
 %%%% load matlab file
-load(filename_mat,'data','markerCSV','annotation','header');
+load(fn_mat,'data','markerCSV','annotation','header');
 
 nTrials=length(markerCSV.probe);
-
 if nTrials~=length(markerCSV.nDist) | nTrials~=length(markerCSV.nTgt)
     error('s.t. wrong with numb probe and nDist or nTgt')
 end
 
-for i=1:nTrials
+for i = 1:nTrials
     sType{i}=[markerCSV.nTgt{i}, markerCSV.nDist{i}];
 end
 
@@ -43,11 +38,11 @@ for s = 1:lenStimT
     %%%% count probes=change
     condP     = sum(strcmp(probes, 'change'));
     
-    %%%% count probes=change and response=Correct
+    %%%% count probes=same and response=Correct
     TN         = sum(strcmp(responses(find(strcmp(probes, 'same'))), 'Correct'));
-    %%%% count probes=change and response=InCorrect
+    %%%% count probes=same and response=InCorrect
     FN        = sum(strcmp(responses(find(strcmp(probes, 'same'))), 'InCorrect'));
-    %%%% count probes=change
+    %%%% count probes=same
     condN    = sum(strcmp(probes, 'same'));
     
     num_total             = length(idxs);
@@ -65,11 +60,11 @@ for s = 1:lenStimT
     accuracy = num_correct / num_total;
 
     %%%% show in console
-    str_performance = sprintf('T=%d, D=%d: MC=%.2f TP=%d FN=%d FP=%d TN=%d P=%.2f R=%.2f Acc=%.2f Miss=%d\n', num_tgt, num_dis, wmc, TP, FN, FP, TN, precision, recall, accuracy, num_missed);
-    disp(str_performance)
+    performance = sprintf('T=%d, D=%d: MC=%.2f TP=%d FN=%d FP=%d TN=%d P=%.2f R=%.2f Acc=%.2f Miss=%d', num_tgt, num_dis, wmc, TP, FN, FP, TN, precision, recall, accuracy, num_missed);
+    disp(performance);
     
     %%%% write to file
-    fprintf(fid, str_performance);
+    fprintf(fid, [performance, '\r\n']);
 end
 
 fclose(fid);
