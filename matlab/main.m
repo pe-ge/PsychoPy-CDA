@@ -1,17 +1,34 @@
 clc
-% to be called from the directry containing filename.hdf5 and filename.csv
 
-%fn = '011 CDT preTRAIN1 C01-LKE-D2 14-03-2019 13-16-18'; %%% ZLY
-%fn = '011 CDT preTRAIN1 C01-LKE-D1 12-03-2019 13-07-13';
-%fn = '012 CDT preTRAIN1 C01-LKE-D1 13-03-2019 11-58-18';
-%fn = '013 CDT preTRAIN1 C01-LKE-D1 13-03-2019 12-59-33';
-fn = '013 CDT preTRAIN1 C01-LKE-D2 14-03-2019 12-36-00';
+DATA_FN = 'Data';
+SUBJECT_FN = '011';
+RECORDING_FN = '011 CDT preTRAIN1 C01-LKE-D1 12-03-2019 13-07-13';
+MIN_GAP_SEC = 0.5;  % minimal gap between saccades/blinks in seconds
+
+% prepare filenames
+full_fn = [DATA_FN, '\', SUBJECT_FN, '\', RECORDING_FN];
+eog_fn = [DATA_FN, '\', SUBJECT_FN, '\eog.hdf5'];
+thresholds_fn = [DATA_FN, '\', SUBJECT_FN, '\thresholds.txt'];
+
+%%%% if threshold not created yet
+if ~exist(thresholds_fn, 'file')
+    plot_eog_collect(eog_fn);
+end
 
 %%%% run conversion and create matlab file 
-hdf5csv2mat(fn)
+hdf5csv2mat(full_fn)
+
+%%%% read thresholds from file
+if  exist(thresholds_fn, 'file')
+    [sacc_threshold, bli_threshold] = read_thresholds(thresholds_fn);
+    
+    detect_saccades_blinks(full_fn, sacc_threshold, bli_threshold, MIN_GAP_SEC);
+else
+    disp('Treshold file for given subject not provided.');
+end
 
 %%%% convert matlab file to edf 
-mat2edf(fn)
+mat2edf(full_fn)
 
 %%%% compute performance amd writes results of to a csv file
-compPerformance(fn)
+compPerformance(full_fn)

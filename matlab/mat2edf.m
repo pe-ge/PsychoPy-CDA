@@ -6,7 +6,7 @@ reRefA2 = false; %%% change A2 to A2/2 for possible  re-reference
 linDetrend = false;  
 % cutBlock=true; %%% needs to correctly check 
 
-load([fn, '.mat'],'data','annotation','header')
+load([fn, '.mat'])
 
 nCh = length(header.labels);
 %%%%% re-reference to linked mastoids

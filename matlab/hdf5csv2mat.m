@@ -43,9 +43,19 @@ elseif sum(~cellfun(@strcmp, marker.desc, cellCheck))
     error('s.t. wrong with cells check ....')
 end
 
+%%%% remove invalid markers at the beginning
+while 1
+    if mT(1) < 10 % less than first 10/256s
+        vID(1) = []; 
+        mT(1) = [];
+    else
+        break;
+    end
+end
+
 %%%% first marker should not be fotodiode
 %%%% if it is, remove it
-while vID(1)==marker.id(3)
+if vID(1) == marker.id(3)
     timeD = (mT(2)-mT(1))/header.sampleFreq;
     if timeD > 3 %%% more than 3 sec difference - remove 
         vID(1) = []; 
@@ -254,10 +264,10 @@ end
 annotation.starttime = annotation.sampleN/header.sampleFreq;
 annotation.duration = ones(1,length(annotation.starttime))*durM;
 
-save([fn, '.mat'],'data','markerCSV','annotation','header')
+save([fn, '.mat'], 'data', 'markerCSV', 'annotation', 'header');
 
 %%%%% function check mL 
-function [mL,mT,markerCSV] = checkmL(mL,mT,markerCSV) 
+function [mL, mT, markerCSV] = checkmL(mL, mT, markerCSV) 
 
 newmL = mL;
 delmP = [];
