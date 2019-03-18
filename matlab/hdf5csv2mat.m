@@ -363,12 +363,3 @@ end
 if sum(~cellfun(@strcmp, mL(iM),markerCSV.probe))
     error('Memory Array types still do not match')
 end
-
-
-
-
-
-
-
-
-

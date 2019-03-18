@@ -1,8 +1,8 @@
 clc
 
 DATA_FN = 'Data';
-SUBJECT_FN = '011';
-RECORDING_FN = '011 CDT preTRAIN1 C01-LKE-D1 12-03-2019 13-07-13';
+SUBJECT_FN = '014';
+RECORDING_FN = '014 CDT preTRAIN1 C01-LKE-D1 15-03-2019 11-36-25';
 MIN_GAP_SEC = 0.5;  % minimal gap between saccades/blinks in seconds
 
 % prepare filenames

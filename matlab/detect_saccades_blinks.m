@@ -1,6 +1,6 @@
 function detect_saccades_blinks(fn, sacc_threshold, bli_threshold, min_gap_sec)
 
-PLOT = 0;
+PLOT = 1;
 
 disp('Detecting saccades and blinks');
 
@@ -98,6 +98,12 @@ if PLOT
     
     plot(one_dim_signal);
     
+    % dummy points for proper legend colors
+    line([-1, -1], [-1, -1], 'Color', 'green');
+    line([-1, -1], [-1, -1], 'Color', 'red');
+    line([-1, -1], [-1, -1], 'Color', 'yellow');
+    line([-1, -1], [-1, -1], 'Color', 'black');
+    
     % set x limits
     xlim([0, length(one_dim_signal)]);
 
@@ -114,6 +120,21 @@ if PLOT
     for blink_x = blinks
         line([blink_x, blink_x], [y_min, y_max], 'Color', 'red');
     end
+    
+    % plot markers
+    for i = 1:length(annotation.event)
+        event_type = annotation.event(i);
+        event_type = event_type{1};
+        event_time = annotation.sampleN(i);
+        
+        if strfind(event_type, 'arr')
+            line([event_time, event_time], [y_min, y_max], 'Color', 'yellow');
+        elseif strfind(event_type, 'RB')
+            line([event_time, event_time], [y_min, y_max], 'Color', 'black');
+        end
+    end
+    
+    legend('signal', 'saccade', 'blink', 'trial start', 'trial response')
 end
 
 function annotation = append_eog_events(annotation, eog_events, event_type, fs)
@@ -133,7 +154,7 @@ for eog_event_time = eog_events
         if annotation_event_idx <= length(annotation.sampleN)
             annotation_event_time = annotation.sampleN(annotation_event_idx);
         else
-            annotation_event_time = inf; % at the end of annotation array, append rest of saccades
+            annotation_event_time = inf; % at the end of annotation array, append rest of eog events
         end
     end
 end
