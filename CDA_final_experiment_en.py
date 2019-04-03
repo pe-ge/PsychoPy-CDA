@@ -1,44 +1,3 @@
-"""
-How I did this:
- * First began writing make_trial_list, adding "static" variables as needed.
-   In total I spent around 3 hours getting this as simple and efficient as
-   possible. In particular how to represent xys, oris, colors, and probes. 
-   (I started out having fields called "xys_left", "xys_right", "oris_target", 
-   "probes_xys" etc.)
- * Then wrote make_grids and added psychopy objects as needed.
- * Then wrote run_block and added arrow, fixation and duration-variables as needed
- * Then added extra stuff:
-     1. record responses (initially using iohub and flip-loops until I 
-        discovered that trigger and break happened immediately on key press.
-     2. record UTC times and send triggers
-     3. save trial
-     4. add practice stuff
-     
-
-Improvements / additions as compared to Contralateral_Delay_Activity_v9-0.py:
- * Generates conditions and draws stimuli. The latter takes 1-3 ms on my laptop.
- * Has practice (according to spec)
- * Records UTC timestamps
- * Saves data
- * timing using frames rather than milliseconds.
- 
-Other changes relative relative to Contralateral_Delay_Activity_v9-0.py:
- * according to Len, the +/- 35 ms is allowed jitter, not desired, so no jitter here.
- * Some colors are changed so that they match the specification.
- * Fewer stimuli loaded (e.g. arrow directions are changed by multiplying)
- * More self-contained script
-
-
-CONSIDER FOR LATER:
- * Add system "free" time using core.wait(0.010, hogCPUperiod=0.001) between flips?
- * Later: make a list of dicts representing rect-properties instead of separate
-      columns in the trial_list (rect object is the meaningful unit, not property).
- * Maybe generate trials from hard-coded conditions
-  * According to spec, fixation cross and arrow are both at +9.7 cm relative to 
-      screen bottom. But the spec image shows the arrow above the fix?
-"""
-
-
 from __future__ import division
 import itertools
 import random
@@ -58,12 +17,9 @@ import tools.barcode
 
 
 EXP_IDENTIFIER = 'CDA_rrLab'
-RESPONSE_DEVICE = 'mouse'  # 'mouse' or 'cedrus_keyboard'. 'cedrus_bits' will be added later
 
-if RESPONSE_DEVICE == 'mouse':
-    KEYS_ANS = {0: 'change', 2: 'same', None: 'none'}  # mapping from buttons to meaning
-    KEYS_ADVANCE = [0]  # keys to continue here and there
-    TRIGGERS_ANS = {0: 41, 2: 42}  # left and right. triggers to send on response onset
+KEYS_ANS = {0: 'change', 2: 'same', None: 'none'}  # mapping from buttons to meaning
+KEYS_ADVANCE = [0]  # keys to continue here and there
 
 # Durations (number of frames)
 # Durations MON_FRAMERATE 32; frames (number of frames)
@@ -133,7 +89,7 @@ FIX_RADUS = 0.15  # cm
 KEYS_QUIT = ['escape']
 
 INSTRUCTION_RESPONSE_START = 2  # minimum number of seconds before accepting responses
-TRIGGERS_CUE = {'left': 21, 'right': 22}  # triggers to send on cue onset
+TRIGGERS_CUE = {'left': 22, 'right': 21}  # swapped compared to original
 
 # Instructions
 TEXT_BREAK = 'You are now allowed to take up to three minutes break.'
@@ -150,41 +106,32 @@ def show_gui_dlg(trials_foldername='trials'):
     
     myDlg.addField('Subject initials (XX): ')
     myDlg.addField('Subject ID (XX): ')
-    myDlg.addField('Condition: ', choices=['CDT', 'CDA','CAVE', 'EC', 'EO'])
-    myDlg.addField('TimePoint type: ', choices=['preTRAIN', 'postTRAIN'])
+    myDlg.addField('Condition: ', choices=['CDT: t={2,3,4} b=5 r=2', 'CDA: t={2,3} b=5 r=3', 'CDA: t={3,4} b=5 r=3'])
     myDlg.addField('TimePoint number: ')
     myDlg.addField('Cohort number (xx): ')
     myDlg.addField('Location: ', choices=['KE', 'BA'])
-    myDlg.addField('Visit number: ')
-    
-    myDlg.addText('Experiment parameters', color='purple')
-    
-    myDlg.addField('Number of targets: ')
-    myDlg.addField('Number of distractors: ')
-    myDlg.addField('Number of blocks: ')
-    myDlg.addField('Number of repetitions: ')
+    myDlg.addField('Dataset version: ', choices=['1', '2', '3'])
     
     while True: 
         data = myDlg.show()
         if myDlg.OK:
-            try:
-                Ntargets = tuple(eval(data[8] + ','))
-                Ndistractors = tuple(eval(data[9] + ','))
-                Nruns = int(data[10])
-                Nrepetitions = int(data[11])
-            except (ValueError, NameError, SyntaxError) as e:
-                gui.warnDlg(prompt='ERROR: incorrect value')
-                continue
+            cond, Ntargets, Nblocks, Nrepetitions = data[2].split(' ')
+            cond = cond[:-1]  # remove ':' from end
+            
+            Ntargets = tuple(eval(Ntargets[3:-1]))
+            Nblocks = int(Nblocks[2:])
+            Nrepetitions = int(Nrepetitions[2:])
+            Ndistractors = (0, 2)
             
             if '' not in data:
                 # attempt to find stored results
                 experiment_params = {
                     'Ntargets': Ntargets,
                     'Ndistractors': Ndistractors,
-                    'Nruns': Nruns,
+                    'Nblocks': Nblocks,
                     'Nrepetitions': Nrepetitions
                 } 
-                trials_filename = 'T={Ntargets},D={Ndistractors},B={Nruns},R={Nrepetitions}.json'.format(**experiment_params)
+                trials_filename = 'T={Ntargets},D={Ndistractors},B={Nblocks},R={Nrepetitions}.json'.format(**experiment_params)
                 trials_file = os.path.join(trials_foldername, trials_filename)
                 if not os.path.isdir(trials_foldername) or not os.path.isfile(trials_file):
                     gui.warnDlg(prompt='Please generate trials first')
@@ -192,11 +139,11 @@ def show_gui_dlg(trials_foldername='trials'):
                 with open(trials_file) as f:
                     full_trial_list = json.load(f)
                     
-                visit_day_idx = int(data[7]) - 1
-                if visit_day_idx < 0 or visit_day_idx >= len(full_trial_list):
-                    gui.warnDlg(prompt='ERROR: Trials file does not have required day of visit')
+                dataset_idx = int(data[6]) - 1
+                if dataset_idx < 0 or dataset_idx >= len(full_trial_list):
+                    gui.warnDlg(prompt='ERROR: Trials file does not have required dataset version')
                     continue
-                trial_list = full_trial_list[visit_day_idx]
+                trial_list = full_trial_list[dataset_idx]
                 break
             else: 
                 gui.warnDlg(prompt='ERROR: some fields are not filled!')
@@ -206,16 +153,15 @@ def show_gui_dlg(trials_foldername='trials'):
     subject_data = {
         'SubInt': data[0],
         'SubID': data[1],
-        'Cond': data[2],
-        'TPtype': data[3],
-        'TPnum': data[4],
-        'Cohort': data[5],
-        'Location': data[6],
-        'Visit': data[7],
+        'Cond': cond,
+        'TPnum': data[3],
+        'Cohort': data[4],
+        'Location': data[5],
+        'Dataset': data[6],
         'current_time':  time.strftime('%d-%m-%Y %H-%M-%S')
     }
     
-    filename = "{SubInt} {SubID} {Cond} {TPtype}{TPnum} C{Cohort}-L{Location}-D{Visit} {current_time}.csv".format(**subject_data)
+    filename = "{SubInt} {SubID} {Cond} {TPnum} C{Cohort}-L{Location}-D{Dataset} {current_time}.csv".format(**subject_data)
     
     return experiment_params, subject_data, filename, trial_list
 
@@ -233,7 +179,7 @@ N_TARGETS = experiment_params['Ntargets']
 N_DISTRACTORS = experiment_params['Ndistractors']
 PROBE_TYPES = ('same', 'change')
 CUES = ['left', 'right']  # mapping of keys to x-axis multiplier for arrow vertices
-BLOCKS = {'experiment': experiment_params['Nruns']}
+BLOCKS = {'experiment': experiment_params['Nblocks']}
 REPETITIONS = {'experiment': experiment_params['Nrepetitions']}
 
 my_monitor = Monitor('testMonitor', width=MON_WIDTH, distance=MON_DISTANCE)  # Create monitor object from the variables above. This is needed to control size of stimuli in degrees.
@@ -286,8 +232,7 @@ def ask(text='', keyList=KEYS_ADVANCE):
     
     # Halt everything and wait for (first) responses matching the keys given in the Q object.
     core.wait(INSTRUCTION_RESPONSE_START)
-    if RESPONSE_DEVICE == 'mouse':
-        key = waitMousePressed(keyList=keyList, keyEvent='release')
+    key = waitMousePressed(keyList=keyList, keyEvent='release')
     if event.getKeys(keyList=KEYS_QUIT):
         core.quit()
     
@@ -311,7 +256,6 @@ def prepare_trials(trial_list):
         trial['frameRate'] = start_info['frame_rate']
         trial['expName'] = EXP_IDENTIFIER
         trial['participant'] = start_info['save_file_name']
-        trial['response_device'] = RESPONSE_DEVICE
         trial['CueCode'] = TRIGGERS_CUE[trial['CueSide']]
         
     return prepared_trial_list
@@ -322,8 +266,7 @@ def show_instruct_on_first_frame(text):
     instruct.draw()
     instruct_continue.draw()
     win.callOnFlip(core.wait, INSTRUCTION_RESPONSE_START)
-    if RESPONSE_DEVICE == 'mouse':
-        win.callOnFlip(waitMousePressed, keyList=KEYS_ADVANCE, keyEvent='release')
+    win.callOnFlip(waitMousePressed, keyList=KEYS_ADVANCE, keyEvent='release')
         
         
 def assess_timing(time_first, time_second, frames):
@@ -332,86 +275,6 @@ def assess_timing(time_first, time_second, frames):
     desired = 1000*frames / MON_FRAMERATE
     print 'actual: %i ms, desired: %i ms, difference: %i ms' %(actual, desired, actual-desired)
 
-
-def write_performance(trial_list):
-    from collections import defaultdict
-    
-    results_path = file_path[:-4] + '-results.csv'
-    
-    true_positive = defaultdict(int)
-    false_positive = defaultdict(int)
-    condition_positive = defaultdict(int)
-    false_negative = defaultdict(int)
-    true_negative = defaultdict(int)
-    condition_negative = defaultdict(int)
-    
-    all_combinations = set()
-    
-    num_correct = defaultdict(int)
-    num_totals = defaultdict(int)
-
-    # count number of total and correct
-    for trial in trial_list:
-        response_corr = trial.get('response.corr', 0)  # 1 = correct, 0 = incorrect
-        
-        num_targets = trial['numTargets']
-        num_distracts = trial['numDistracts']
-        
-        if trial['Probe'] == 'same':
-            condition_negative[(num_targets, num_distracts)] += 1
-            true_negative[(num_targets, num_distracts)] += response_corr
-            false_negative[(num_targets, num_distracts)] += 1 - response_corr
-        elif trial['Probe'] == 'change':
-            condition_positive[(num_targets, num_distracts)] += 1
-            true_positive[(num_targets, num_distracts)] += response_corr
-            false_positive[(num_targets, num_distracts)] += 1 - response_corr
-        else:
-            print 'incorrect probe value (%s) :-(' % (trial['Probe'])
-        
-        all_combinations.add((num_targets, num_distracts))
-        
-        num_correct[(num_targets, num_distracts)] += response_corr
-        num_totals[(num_targets, num_distracts)] += 1
-
-    # evaluate performance
-    with open(results_path, 'w') as f:
-        # sort items first by target, then by distractor
-        sorted_items = sorted(list(all_combinations), key= lambda (t, d): 100 * t + d)
-        for (num_targets, num_distracts) in sorted_items:
-            TP = true_positive[(num_targets, num_distracts)]
-            FP = false_positive[(num_targets, num_distracts)]
-            TN = true_negative[(num_targets, num_distracts)]
-            FN = false_negative[(num_targets, num_distracts)]
-            
-            CP = condition_positive[(num_targets, num_distracts)]
-            CN = condition_negative[(num_targets, num_distracts)]
-            
-            num_corr = num_correct[(num_targets, num_distracts)]
-            num_tot = num_totals[(num_targets, num_distracts)]
-            
-            hit_rate = TP / CP
-            false_alarm = FN / CN
-            
-            wmc = num_targets * (hit_rate - false_alarm)
-            precision = TP / (TP+FP)
-            recall = TP / (TP+FN)
-            accuracy = num_corr / num_tot
-            
-            data = {
-                'T': num_targets,
-                'D': num_distracts,
-                'MC': wmc,
-                'TP': TP,
-                'FN': FN,
-                'FP': FP,
-                'TN': TN,
-                'P': precision,
-                'R': recall,
-                'Acc': accuracy
-            }
-            performance = 'T={T}, D={D}: MC={MC} TP={TP} FN={FN} FP={FP} TN={TN} P={P} R={R} Acc={Acc}'.format(**data)
-            print performance
-            f.write(performance + '\n')
 
 def run_block(experiment_params, trial_list):
     trialN = 1
@@ -522,8 +385,7 @@ def run_block(experiment_params, trial_list):
         maxWait = response_end_time - core.getTime()
         
         # Get response
-        if RESPONSE_DEVICE == 'mouse':
-            key = waitMousePressed(keyList=KEYS_ANS.keys(), maxWait=maxWait)  # desired duration from flip_time, but allow for 8 ms to catch the next win.flip()
+        key = waitMousePressed(keyList=KEYS_ANS.keys(), maxWait=maxWait)  # desired duration from flip_time, but allow for 8 ms to catch the next win.flip()
             
         # React to response
 
@@ -541,11 +403,9 @@ def run_block(experiment_params, trial_list):
 
         # SAVE non-practice trials if experiment was not exited.
         if event.getKeys(keyList=KEYS_QUIT):
-            write_performance(trial_list)
             core.quit()
         writer._write_immediate(trial)
-    write_performance(trial_list)
-
+    
 
 file_path = os.path.join(start_info['save_file_path'], filename)
 writer = csvWriter(file_path) # save I/O for when the experiment ends/python errors
